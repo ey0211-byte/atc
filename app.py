@@ -231,4 +231,4 @@ def process_landing_clearance(callsign, selected_runway):
 
 
 def auto_emergency_control():
-    """
+    
