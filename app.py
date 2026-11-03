@@ -1,9 +1,10 @@
 import random
+import time
 import pandas as pd
 import streamlit as st
 
 # ==========================================
-# 1. 고밀도 컴팩트 UI 및 이착륙 구분 스타일
+# 1. 고밀도 컴팩트 UI 및 스타일 설정
 # ==========================================
 st.set_page_config(
     page_title="ATC 대규모 이착륙 관제 시뮬레이터",
@@ -14,13 +15,10 @@ st.set_page_config(
 st.markdown(
     """
     <style>
-    /* 전체 배경 */
     .stApp {
         background-color: #070a13 !important;
         color: #e2e8f0 !important;
     }
-
-    /* 초고밀도 컴팩트 버튼 */
     div.stButton > button {
         background-color: #1e293b !important;
         color: #ffffff !important;
@@ -36,13 +34,10 @@ st.markdown(
         color: #38bdf8 !important;
         border-color: #38bdf8 !important;
     }
-
     div.stButton > button[kind="primary"] {
         background-color: #dc2626 !important;
         border-color: #ef4444 !important;
     }
-
-    /* 카드 스타일 (착륙: 푸른색 계열 / 이륙: 주황색 계열) */
     .arr-card {
         background-color: #0c192e;
         border: 1px solid #1d4ed8;
@@ -61,7 +56,6 @@ st.markdown(
     .plane-title-dep { font-size: 12px !important; font-weight: bold; color: #fbbf24; }
     .plane-sub { font-size: 11px !important; color: #cbd5e1; }
 
-    /* 활주로 미니 카드 */
     .runway-card {
         background-color: #0f172a;
         border: 1px solid #334155;
@@ -71,11 +65,8 @@ st.markdown(
         text-align: center;
         font-size: 11px;
     }
-
-    /* 프로그레스 바 높이 축소 */
     .stProgress > div > div > div > div { height: 5px !important; }
 
-    /* 배지 고밀도화 */
     .badge-arr { background-color: #2563eb; color: white; padding: 1px 4px; font-size: 10px; border-radius: 3px; font-weight: bold; }
     .badge-dep { background-color: #d97706; color: white; padding: 1px 4px; font-size: 10px; border-radius: 3px; font-weight: bold; }
     .badge-danger { background-color: #dc2626; color: white; padding: 1px 4px; font-size: 10px; border-radius: 3px; font-weight: bold; }
@@ -86,7 +77,7 @@ st.markdown(
 )
 
 # ==========================================
-# 2. 세션 상태 초기화 & 구버전 데이터 보정 로직
+# 2. 세션 상태 초기화 및 안전 보정
 # ==========================================
 RUNWAY_LIST = [f"RWY {i:02d}" for i in range(1, 11)]
 
@@ -112,8 +103,9 @@ if "last_landed_type" not in st.session_state:
     st.session_state.last_landed_type["EMG-01"] = None
 if "logs" not in st.session_state:
     st.session_state.logs = []
+if "auto_play" not in st.session_state:
+    st.session_state.auto_play = False
 
-# 🔴 [KeyError 방지] 구버전 세션 데이터에 신규 키가 없으면 자동으로 보정
 for p in st.session_state.planes:
     if "category" not in p:
         p["category"] = "ARR"
@@ -122,10 +114,9 @@ for p in st.session_state.planes:
 
 
 # ==========================================
-# 3. 비행기 생성 및 로직 함수
+# 3. 로직 함수
 # ==========================================
 def spawn_plane():
-    """신규 이착륙 항공기 랜덤 생성"""
     prefixes = [
         "KAL",
         "AAR",
@@ -180,7 +171,6 @@ def spawn_plane():
 
 
 def init_game():
-    """게임 초기화"""
     st.session_state.game_started = True
     st.session_state.planes = []
     st.session_state.score = 200
@@ -201,7 +191,6 @@ def init_game():
 
 
 def approve_action(callsign, target_runway):
-    """착륙 또는 이륙 허가 처리"""
     plane = next(
         (p for p in st.session_state.planes if p["callsign"] == callsign), None
     )
@@ -247,7 +236,6 @@ def approve_action(callsign, target_runway):
 
 
 def reject_action(callsign):
-    """착륙 거절 또는 이륙 지연"""
     plane = next(
         (p for p in st.session_state.planes if p["callsign"] == callsign), None
     )
@@ -266,7 +254,6 @@ def reject_action(callsign):
 
 
 def force_clear_runway(runway_name):
-    """활주로 강제 개방"""
     st.session_state.runways_busy[runway_name] = 0
     log_msg = f"🧹 [강제 비우기] {runway_name} 활주로가 비상 개방되었습니다."
     st.session_state.logs.append(log_msg)
@@ -274,7 +261,6 @@ def force_clear_runway(runway_name):
 
 
 def next_turn():
-    """시간 진행"""
     st.session_state.turn += 1
 
     for r in st.session_state.runways_busy:
@@ -353,11 +339,17 @@ else:
 
     st.divider()
 
-    c1, c2, c3 = st.columns([1.5, 1, 1])
+    # 상단 컨트롤 바 (실시간 자동 진행 토글 추가)
+    c1, c2, c3, c4 = st.columns([1.2, 1.3, 1, 0.8])
     with c1:
+        st.session_state.auto_play = st.toggle(
+            "⏱️ 실시간 자동 진행 (2초마다 소모)",
+            value=st.session_state.auto_play,
+        )
+    with c2:
         if not st.session_state.emg_runway_open:
             if st.button(
-                "🚨 [비상] 01E 비상 활주로 추가 개설",
+                "🚨 [비상] 01E 활주로 개설",
                 type="primary",
                 use_container_width=True,
             ):
@@ -369,15 +361,13 @@ else:
         else:
             st.success("🚨 비상 활주로(EMG-01) 가동 중")
 
-    with c2:
+    with c3:
         if st.button(
-            "⏭️ 다음 Turn 진행 (시간 흐름)",
-            type="primary",
-            use_container_width=True,
+            "⏭️ 수동 Turn 진행", type="primary", use_container_width=True
         ):
             next_turn()
             st.rerun()
-    with c3:
+    with c4:
         if st.button("🔄 리셋", use_container_width=True):
             init_game()
             st.rerun()
@@ -556,3 +546,9 @@ else:
         st.subheader("📜 관제 교신 로그")
         for log in reversed(st.session_state.logs[-8:]):
             st.caption(log)
+
+    # 🔴 실시간 자동 진행 루프 (2초 대기 후 화면 자동으로 다음 턴 진행)
+    if st.session_state.auto_play:
+        time.sleep(2)
+        next_turn()
+        st.rerun()
