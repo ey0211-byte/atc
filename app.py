@@ -28,7 +28,7 @@ st.markdown(
         color: #ffffff !important;
     }
 
-    /* 스트림릿 버튼 강제 스타일 */
+    /* 스트림릿 버튼 스타일 */
     div.stButton > button {
         background-color: #0f172a !important;
         color: #ffffff !important;
@@ -101,7 +101,7 @@ st.markdown(
 )
 
 # ==========================================
-# 2. 세션 상태 및 기본 데이터 초기화
+# 2. 세션 상태 및 데이터 초기화
 # ==========================================
 RUNWAY_LIST = [f"RWY {i:02d}" for i in range(1, 11)]
 GATES = [f"Gate {i:02d}" for i in range(1, 9)]
@@ -162,8 +162,13 @@ if "last_spawn_time" not in st.session_state:
     st.session_state.last_spawn_time = time.time()
 
 
+def add_log(sector_code, text):
+    """섹터별 독립 로깅 시스템 (APPROACH, GROUND, ENROUTE, ALL)"""
+    st.session_state.logs.append({"sector": sector_code, "text": text})
+
+
 # ==========================================
-# 3. 비행기 생성 및 상태 세분화
+# 3. 비행기 생성 및 로직
 # ==========================================
 def spawn_plane():
     prefixes = [
@@ -245,7 +250,7 @@ def spawn_plane():
                         "fuel": float(random.randint(60, 95)),
                         "altitude": random.randint(24000, 32000),
                         "delay": 0.0,
-                        "status": "접근관제소 이관 요청",
+                        "status": "접근구역 이양 대기",
                         "assigned_runway": None,
                         "assigned_gate": None,
                         "assigned_center": random.choice(CENTERS),
@@ -270,9 +275,11 @@ def init_game():
     st.session_state.gates_occupied = {g: None for g in GATES}
     st.session_state.last_tick_time = now
     st.session_state.last_spawn_time = now
-    st.session_state.logs = [
-        "🚨 [통합 관제 개시] 섹터별 역할 및 비행기 분리가 완벽하게 고정되었습니다."
-    ]
+    st.session_state.logs = []
+    add_log(
+        "ALL",
+        "🚨 [통합 관제 개시] 관제 섹터별 교신 로그가 완전히 분리되었습니다.",
+    )
 
     for _ in range(8):
         spawn_plane()
@@ -297,8 +304,9 @@ def run_ai_auto_controller(now):
                         p["status"] = "착륙 접근 중"
                         p["assigned_runway"] = r
                         st.session_state.runways_busy_until[r] = now + 7.0
-                        st.session_state.logs.append(
-                            f"🤖 [AI 착륙 승인] {p['callsign']} ➔ {r} (연료 긴급)"
+                        add_log(
+                            "APPROACH",
+                            f"🤖 [AI 착륙 승인] {p['callsign']} ➔ {r} (연료 긴급)",
                         )
                         break
 
@@ -314,8 +322,9 @@ def run_ai_auto_controller(now):
                 p["assigned_gate"] = target_g
                 p["status"] = "게이트 이동 중"
                 st.session_state.gates_occupied[target_g] = p["callsign"]
-                st.session_state.logs.append(
-                    f"🤖 [AI 지상 관제] {p['callsign']} ➔ {target_g} 이동 지시"
+                add_log(
+                    "GROUND",
+                    f"🤖 [AI 지상 관제] {p['callsign']} ➔ {target_g} 이동 지시",
                 )
 
         # 3. 항로 관제 AI 보조
@@ -326,8 +335,9 @@ def run_ai_auto_controller(now):
             p["status"] = "관제 이양 완료"
             st.session_state.handoff_count += 1
             st.session_state.score += 15
-            st.session_state.logs.append(
-                f"🤖 [AI 항로 관제] {p['callsign']} ➔ {p['assigned_center']} 이양 완료"
+            add_log(
+                "ENROUTE",
+                f"🤖 [AI 항로 관제] {p['callsign']} ➔ {p['assigned_center']} 이양 완료",
             )
 
 
@@ -353,17 +363,16 @@ def update_realtime_engine():
                     p["phase"] = "TAXI_TO_GATE"
                     p["status"] = "게이트 배정 대기"
                     p["distance"] = 0.0
-                    st.session_state.logs.append(
-                        f"🛬 [{p['callsign']}] 활주로 착륙 완료! (지상 관제 이관)"
+                    add_log(
+                        "APPROACH",
+                        f"🛬 [{p['callsign']}] 활주로 터치다운 완료 (지상 관제 이관)",
                     )
             else:
                 p["fuel"] -= 0.5 * dt
                 if p["fuel"] <= 0:
                     st.session_state.game_over = True
                     st.session_state.game_over_reason = f"💥 [{p['callsign']}] 항공기의 연료가 0%가 되어 추락했습니다! (관제 실패)"
-                    st.session_state.logs.append(
-                        st.session_state.game_over_reason
-                    )
+                    add_log("ALL", st.session_state.game_over_reason)
                     return
 
         # B. 지상 이동 단계
@@ -374,8 +383,9 @@ def update_realtime_engine():
                     p["phase"] = "PARKED"
                     p["status"] = "게이트 주기 완료"
                     st.session_state.score += 20
-                    st.session_state.logs.append(
-                        f"🅿️ [{p['callsign']}] {p['assigned_gate']} 주기 완료!"
+                    add_log(
+                        "GROUND",
+                        f"🅿️ [{p['callsign']}] {p['assigned_gate']} 주기 완료",
                     )
                     continue
 
@@ -396,8 +406,9 @@ def update_realtime_engine():
                     p["phase"] = "ENROUTE_CLIMB"
                     p["status"] = "관제권 이양(Handoff) 요청"
                     p["altitude"] = 14000
-                    st.session_state.logs.append(
-                        f"🛫 [{p['callsign']}] 이륙 성공! (항로 관제 이관)"
+                    add_log(
+                        "APPROACH",
+                        f"🛫 [{p['callsign']}] 이륙 성공 (항로 관제 이관)",
                     )
 
         # C. 항로 이양 단계
@@ -659,7 +670,7 @@ if st.session_state.game_over:
 
 elif not st.session_state.game_started:
     st.info(
-        "👋 상단 라디오 버튼으로 섹터를 선택하면 전체 화면이 완전히 고정 전환됩니다."
+        "👋 상단 라디오 버튼으로 섹터를 선택하면 전체 화면과 교신 로그가 완전히 분리되어 전환됩니다."
     )
     if st.button(
         "🚀 통합 관제 업무 개시", type="primary", use_container_width=True
@@ -676,7 +687,6 @@ else:
     m4.metric("☁️ 항로 이양 성공", f"{st.session_state.handoff_count}대")
     m5.metric("✈️ 관리 항공기", f"{len(st.session_state.planes)}대")
 
-    # 🔒 key="active_sector" 고정으로 버튼 클릭 시 튕김 방지
     bar_c1, bar_c2 = st.columns([3, 1])
     with bar_c1:
         st.radio(
@@ -754,6 +764,10 @@ else:
                             st.session_state.runways_busy_until[sel_rwy] = (
                                 now + 7.0
                             )
+                            add_log(
+                                "APPROACH",
+                                f"🛬 [{p['callsign']}] {sel_rwy} 착륙 접근 허가",
+                            )
                             st.rerun()
 
             st.divider()
@@ -774,9 +788,13 @@ else:
                 ):
                     p["status"] = "이륙 가속 중"
                     p["takeoff_timer"] = 5.0
+                    add_log(
+                        "APPROACH",
+                        f"🛫 [{p['callsign']}] 활주로 이륙 가속 허가",
+                    )
                     st.rerun()
 
-        # SECTOR 2: 지상 / 게이트 관제 (오직 여기서만 활주로 이동 지시)
+        # SECTOR 2: 지상 / 게이트 관제
         elif "2. 지상" in current_sector:
             st.subheader("🚜 지상/게이트 관제 섹터")
 
@@ -830,6 +848,10 @@ else:
                                 st.session_state.gates_occupied[sel_g] = p[
                                     "callsign"
                                 ]
+                                add_log(
+                                    "GROUND",
+                                    f"🚜 [{p['callsign']}] {sel_g} 유도로 이동 지시",
+                                )
                                 st.rerun()
 
             st.divider()
@@ -863,6 +885,10 @@ else:
                         p["phase"] = "TAXI_TO_RWY"
                         p["status"] = "활주로 이동 중"
                         p["assigned_runway"] = sel_rwy
+                        add_log(
+                            "GROUND",
+                            f"🚜 [{p['callsign']}] 푸시백 완료 ➔ {sel_rwy} 이동",
+                        )
                         st.rerun()
 
             if taxi_rwy_list:
@@ -874,7 +900,7 @@ else:
                         f"🟡 [{p['callsign']}] ➔ {p.get('assigned_runway')} 유도로 이동 중..."
                     )
 
-        # SECTOR 3: 항로 / 하늘 관제 (활주로/지상 용어 100% 차단)
+        # SECTOR 3: 항로 / 하늘 관제 (착륙/활주로 용어 100% 제거)
         else:
             st.subheader("☁️ 항로/하늘 관제 섹터")
 
@@ -910,14 +936,15 @@ else:
                     p["status"] = "관제 이양 완료"
                     st.session_state.handoff_count += 1
                     st.session_state.score += 15
-                    st.session_state.logs.append(
-                        f"📡 [{p['callsign']}] {p['assigned_center']} 이양 완료!"
+                    add_log(
+                        "ENROUTE",
+                        f"📡 [{p['callsign']}] {p['assigned_center']} 이양 완료",
                     )
                     st.rerun()
 
             st.divider()
             st.caption(
-                f"🛬 고고도 영공 진입기 접근관제소 이관 ({len(enroute_inbound_list)}대)"
+                f"☁️ 영공 진입 항공기 접근구역 이관 ({len(enroute_inbound_list)}대)"
             )
             for p in enroute_inbound_list:
                 st.markdown(
@@ -930,15 +957,16 @@ else:
                     unsafe_allow_html=True,
                 )
                 if st.button(
-                    f"🛬 접근관제소(Sector 1)로 이관",
+                    f"📡 접근 관제구역(Sector 1)으로 이관",
                     key=f"inbound_{p['callsign']}",
                     use_container_width=True,
                 ):
                     p["phase"] = "APPROACH"
                     p["status"] = "접근 요청 중"
                     p["distance"] = 35.0
-                    st.session_state.logs.append(
-                        f"🛬 [{p['callsign']}] 접근관제소 하강 이관 완료!"
+                    add_log(
+                        "ENROUTE",
+                        f"📡 [{p['callsign']}] 접근 관제구역(Sector 1) 하강 이관 완료",
                     )
                     st.rerun()
 
@@ -950,7 +978,7 @@ else:
         render_sector_specific_radar()
 
     # ----------------------------------------------------
-    # [우측 열] 🔄 섹터 맞춤형 현황판
+    # [우측 열] 🔄 섹터 맞춤형 현황판 & 독립 로그
     # ----------------------------------------------------
     with col_right:
         if "1. 접근" in current_sector:
@@ -983,6 +1011,10 @@ else:
                             use_container_width=True,
                         ):
                             st.session_state.runways_busy_until[r_name] = 0.0
+                            add_log(
+                                "APPROACH",
+                                f"🧹 [{r_name}] 활주로 강제 비우기 완료",
+                            )
                             st.rerun()
                     else:
                         st.markdown(
@@ -1002,8 +1034,9 @@ else:
                     use_container_width=True,
                 ):
                     st.session_state.emg_runway_open = True
-                    st.session_state.logs.append(
-                        "🚨 [비상 활주로] EMG-01 활주로가 개설되었습니다!"
+                    add_log(
+                        "APPROACH",
+                        "🚨 [비상 활주로] EMG-01 활주로가 개설되었습니다!",
                     )
                     st.rerun()
 
@@ -1057,10 +1090,22 @@ else:
                         unsafe_allow_html=True,
                     )
 
+        # 섹터별 고유 로그만 필터링하여 출력
         st.divider()
-        st.caption("📜 실시간 관제 교신 로그")
-        for log in reversed(st.session_state.logs[-5:]):
-            st.caption(log)
+        st.caption("📜 섹터 전용 교신 로그")
+        sec_code = (
+            "APPROACH"
+            if "1. 접근" in current_sector
+            else ("GROUND" if "2. 지상" in current_sector else "ENROUTE")
+        )
+        filtered_logs = [
+            l["text"]
+            for l in st.session_state.logs
+            if l.get("sector") in [sec_code, "ALL"]
+        ]
+
+        for log_text in reversed(filtered_logs[-5:]):
+            st.caption(log_text)
 
     time.sleep(0.4)
     st.rerun()
