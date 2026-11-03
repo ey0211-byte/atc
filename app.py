@@ -1,3 +1,4 @@
+import math
 import random
 import time
 import matplotlib.pyplot as plt
@@ -5,10 +6,10 @@ import pandas as pd
 import streamlit as st
 
 # ==========================================
-# 1. 고밀도 ATC 레이더 인터페이스 스타일
+# 1. 초고밀도 Pro ATC 대시보드 테마 스타일
 # ==========================================
 st.set_page_config(
-    page_title="ATC 관제탑 통합 실시간 시뮬레이터",
+    page_title="Pro ATC 관제탑 실시간 통합 시뮬레이터",
     page_icon="✈️",
     layout="wide",
 )
@@ -16,106 +17,107 @@ st.set_page_config(
 st.markdown(
     """
     <style>
-    /* 앱 전체 어두운 네이비 배경 */
+    /* 전체 배경: 프로 관제탑 어두운 네이비 */
     .stApp {
-        background-color: #050811 !important;
-        color: #e2e8f0 !important;
+        background-color: #030712 !important;
+        color: #f1f5f9 !important;
     }
     
-    /* 컴팩트 가독성 버튼 */
+    /* 컴팩트 고대비 버튼 */
     div.stButton > button {
-        background-color: #1e293b !important;
+        background-color: #0f172a !important;
         color: #ffffff !important;
-        border: 1px solid #475569 !important;
+        border: 1px solid #334155 !important;
         font-weight: bold !important;
         font-size: 11px !important;
-        padding: 3px 5px !important;
-        min-height: 26px !important;
+        padding: 2px 4px !important;
+        min-height: 24px !important;
         border-radius: 4px !important;
     }
     div.stButton > button:hover {
-        background-color: #334155 !important;
+        background-color: #1e293b !important;
         color: #38bdf8 !important;
         border-color: #38bdf8 !important;
     }
     div.stButton > button[kind="primary"] {
-        background-color: #dc2626 !important;
+        background-color: #b91c1c !important;
         border-color: #ef4444 !important;
     }
 
-    /* 파일럿 요구사항 메시지 박스 */
+    /* 파일럿 요구사항 박스 */
     .msg-box {
-        background-color: #0d1527;
-        border: 2px solid #38bdf8;
-        border-radius: 8px;
-        padding: 10px;
-        margin-bottom: 12px;
-        box-shadow: 0 0 10px rgba(56, 189, 248, 0.2);
+        background-color: #090d16;
+        border: 1px solid #0284c7;
+        border-radius: 6px;
+        padding: 8px;
+        margin-bottom: 8px;
     }
     .msg-title {
         color: #38bdf8;
-        font-size: 13px;
+        font-size: 12px;
         font-weight: bold;
-        margin-bottom: 6px;
+        margin-bottom: 4px;
         border-bottom: 1px solid #1e293b;
-        padding-bottom: 4px;
+        padding-bottom: 2px;
     }
     .msg-item {
-        font-size: 11px;
-        margin-bottom: 4px;
-        color: #f1f5f9;
+        font-size: 10.5px;
+        margin-bottom: 3px;
+        color: #e2e8f0;
     }
 
     /* 카드 스타일 */
     .arr-card {
-        background-color: #0c192e;
+        background-color: #0a1329;
         border: 1px solid #1d4ed8;
-        border-radius: 6px;
-        padding: 6px;
+        border-radius: 5px;
+        padding: 5px;
         margin-bottom: 4px;
     }
     .dep-card {
-        background-color: #26170c;
+        background-color: #211209;
         border: 1px solid #d97706;
-        border-radius: 6px;
-        padding: 6px;
+        border-radius: 5px;
+        padding: 5px;
         margin-bottom: 4px;
     }
-    .plane-title-arr { font-size: 12px !important; font-weight: bold; color: #60a5fa; }
-    .plane-title-dep { font-size: 12px !important; font-weight: bold; color: #fbbf24; }
-    .plane-sub { font-size: 11px !important; color: #cbd5e1; }
+    .plane-title-arr { font-size: 11.5px !important; font-weight: bold; color: #60a5fa; }
+    .plane-title-dep { font-size: 11.5px !important; font-weight: bold; color: #fbbf24; }
+    .plane-sub { font-size: 10.5px !important; color: #cbd5e1; }
 
     /* 상세정보 카드 */
     .detail-card {
-        background-color: #0f172a;
+        background-color: #0b1329;
         border: 1px solid #38bdf8;
-        border-radius: 8px;
-        padding: 10px;
-        margin-bottom: 10px;
+        border-radius: 6px;
+        padding: 8px;
+        margin-bottom: 8px;
     }
 
-    /* 활주로 미니 카드 */
+    /* 활주로 카드 */
     .runway-card {
-        background-color: #0f172a;
+        background-color: #090d16;
         border: 1px solid #334155;
-        border-radius: 5px;
-        padding: 4px;
-        margin-bottom: 4px;
+        border-radius: 4px;
+        padding: 3px;
+        margin-bottom: 3px;
         text-align: center;
         font-size: 10px;
     }
     .stProgress > div > div > div > div { height: 4px !important; }
 
-    .badge-danger { background-color: #dc2626; color: white; padding: 1px 4px; font-size: 10px; border-radius: 3px; font-weight: bold; }
-    .badge-warn { background-color: #d97706; color: white; padding: 1px 4px; font-size: 10px; border-radius: 3px; font-weight: bold; }
-    .badge-success { background-color: #16a34a; color: white; padding: 1px 4px; font-size: 10px; border-radius: 3px; font-weight: bold; }
+    .badge-danger { background-color: #dc2626; color: white; padding: 1px 3px; font-size: 9.5px; border-radius: 3px; font-weight: bold; }
+    .badge-warn { background-color: #d97706; color: white; padding: 1px 3px; font-size: 9.5px; border-radius: 3px; font-weight: bold; }
+    .badge-success { background-color: #16a34a; color: white; padding: 1px 3px; font-size: 9.5px; border-radius: 3px; font-weight: bold; }
+    .badge-arr { background-color: #2563eb; color: white; padding: 1px 3px; font-size: 9.5px; border-radius: 3px; font-weight: bold; }
+    .badge-dep { background-color: #b45309; color: white; padding: 1px 3px; font-size: 9.5px; border-radius: 3px; font-weight: bold; }
     </style>
 """,
     unsafe_allow_html=True,
 )
 
 # ==========================================
-# 2. 세션 상태 및 변수 초기화
+# 2. 세션 상태 및 기본 변수
 # ==========================================
 RUNWAY_LIST = [f"RWY {i:02d}" for i in range(1, 11)]
 
@@ -131,16 +133,16 @@ AIRPORTS = [
 ]
 
 REQ_ARR_LIST = [
-    ("🚨 [비상] 기내 심장마비 응급 환자 발생! 비상 착륙 요청", "EMERGENCY"),
+    ("🚨 [비상] 기내 응급 환자 발생! 우선 착륙 요청", "EMERGENCY"),
     ("⚡ [우선] 잔여 연료 저하 경고! 신속 착륙 요청", "PRIORITY"),
-    ("💨 [기상] 난기류 조우로 인한 고도 하강 및 착륙 요청", "PRIORITY"),
-    ("✅ [정상] 표준 접근 절차 준수 중", "NORMAL"),
+    ("💨 [기상] 난기류 조우로 인한 고도 하강 요청", "PRIORITY"),
+    ("✅ [정상] 표준 접근 절차 진행 중", "NORMAL"),
 ]
 
 REQ_DEP_LIST = [
     ("⚡ [우선] 연결편 지연으로 인한 조기 이륙 요청", "PRIORITY"),
-    ("👥 [승객] 전 승객 탑승 완료, 신속 이륙 허가 요청", "PRIORITY"),
-    ("🔥 [점검] 엔진 정밀 점검 필요로 이륙 순서 연기 요청", "PRIORITY"),
+    ("👥 [승객] 승객 탑승 완료, 이륙 허가 요청", "PRIORITY"),
+    ("🔥 [점검] 엔진 정밀 점검으로 이륙 연기 요청", "PRIORITY"),
     ("✅ [정상] 지상 유도로 대기 완료", "NORMAL"),
 ]
 
@@ -177,7 +179,7 @@ if "last_spawn_time" not in st.session_state:
 
 
 # ==========================================
-# 3. 비행기 생성 및 실시간 관제 로직
+# 3. 비행기 생성 및 실시간 엔진
 # ==========================================
 def spawn_plane():
     prefixes = [
@@ -208,7 +210,7 @@ def spawn_plane():
                     "B737-MAX8 (소형)",
                 ]
             )
-            passengers = random.randint(110, 360)
+            passengers = random.randint(120, 350)
             origin = random.choice(AIRPORTS)
 
             if category == "ARR":
@@ -221,7 +223,7 @@ def spawn_plane():
                         "passengers": passengers,
                         "origin": origin,
                         "fuel": float(random.randint(45, 90)),
-                        "distance": float(random.randint(16, 36)),
+                        "distance": float(random.randint(18, 36)),
                         "delay": 0.0,
                         "request": req_text,
                         "req_level": req_level,
@@ -269,7 +271,7 @@ def init_game():
     st.session_state.last_tick_time = now
     st.session_state.last_spawn_time = now
     st.session_state.logs = [
-        "🚨 [관제 업무 개시] 실시간 파일럿 교신 및 레이더 타겟 모니터링이 가동되었습니다."
+        "🚨 [관제 업무 개시] Pro ATC 3열 대시보드 레이더 시스템이 작동합니다."
     ]
 
     for _ in range(8):
@@ -277,7 +279,7 @@ def init_game():
 
 
 def update_realtime_engine():
-    """실시간 기름 소모 (5초당 2.5% 소모 = 초당 0.5%)"""
+    """실시간 기름 소모 엔진 (5초당 2.5% = 초당 0.5% 차감)"""
     if not st.session_state.game_started or st.session_state.game_over:
         return
 
@@ -297,7 +299,7 @@ def update_realtime_engine():
                 st.session_state.landed_count += 1
                 st.session_state.score += 20
                 st.session_state.logs.append(
-                    f"🛬 [{p['callsign']}] {p.get('assigned_runway')} 안전 착륙 완료!"
+                    f"🛬 [{p['callsign']}] {p.get('assigned_runway')} 터치다운 성공!"
                 )
                 if st.session_state.selected_target == p["callsign"]:
                     st.session_state.selected_target = None
@@ -310,7 +312,7 @@ def update_realtime_engine():
                 st.session_state.tookoff_count += 1
                 st.session_state.score += 15
                 st.session_state.logs.append(
-                    f"🛫 [{p['callsign']}] {p.get('assigned_runway')} 성공적 이륙 완료!"
+                    f"🛫 [{p['callsign']}] {p.get('assigned_runway')} 이륙 상승 완료!"
                 )
                 if st.session_state.selected_target == p["callsign"]:
                     st.session_state.selected_target = None
@@ -324,7 +326,7 @@ def update_realtime_engine():
             if p["fuel"] <= 0:
                 p["fuel"] = 0.0
                 st.session_state.game_over = True
-                st.session_state.game_over_reason = f"💥 [{p['callsign']}] 비행기의 연료가 0%에 도달하여 추락했습니다! (관제 실패)"
+                st.session_state.game_over_reason = f"💥 [{p['callsign']}] 항공기의 연료가 0%가 되어 추락했습니다! (관제 실패)"
                 st.session_state.logs.append(st.session_state.game_over_reason)
                 return
 
@@ -336,10 +338,10 @@ def update_realtime_engine():
 
     st.session_state.planes = remaining_planes
 
-    # 5초마다 신규 비행기 유입 (최대 12대 유지)
+    # 5초마다 신규 항공기 진입 (최대 11대 유지)
     if (
         now - st.session_state.last_spawn_time > 5.0
-        and len(st.session_state.planes) < 12
+        and len(st.session_state.planes) < 11
     ):
         spawn_plane()
         st.session_state.last_spawn_time = now
@@ -363,7 +365,7 @@ def approve_action(callsign, target_runway):
     if last_type and "대형" in last_type and "대형" not in plane.get("type", ""):
         occupancy_seconds += 3.0
         st.toast(
-            f"⚠️ [{target_runway}] 선행 대형기로 인해 활주로 점유 +3초",
+            f"⚠️ [{target_runway}] 선행 대형기 와류 영향으로 점유시간 +3초",
             icon="⚠️",
         )
 
@@ -373,11 +375,11 @@ def approve_action(callsign, target_runway):
 
     if plane.get("category") == "ARR":
         plane["status"] = "착륙 접근 중"
-        log_msg = f"🛬 [착륙 승인] {callsign} ➔ {target_runway}"
+        log_msg = f"🛬 [착륙 허가] {callsign} ➔ {target_runway}"
     else:
         plane["status"] = "이륙 가속 중"
         plane["takeoff_timer"] = 5.0
-        log_msg = f"🛫 [이륙 승인] {callsign} ➔ {target_runway}"
+        log_msg = f"🛫 [이륙 허가] {callsign} ➔ {target_runway}"
 
     st.session_state.logs.append(log_msg)
     st.toast(log_msg, icon="📡")
@@ -392,10 +394,10 @@ def reject_action(callsign):
 
     if plane.get("category") == "ARR":
         plane["status"] = "상공 대기 중"
-        log_msg = f"🛑 [착륙 거절] {callsign} 상공 대기 궤도 선회 지시"
+        log_msg = f"🛑 [착륙 거절] {callsign} 상공 홀딩 궤도 진입"
     else:
         plane["status"] = "지상 대기 중"
-        log_msg = f"🛑 [이륙 거절] {callsign} 게이트 대기 지시"
+        log_msg = f"🛑 [이륙 거절] {callsign} 유도로 일시 대기"
 
     st.session_state.logs.append(log_msg)
     st.toast(log_msg, icon="🛑")
@@ -409,22 +411,58 @@ def force_clear_runway(runway_name):
 
 
 # ==========================================
-# 4. 고품질 레이더 그래픽 렌더링 함수
+# 4. Pro ATC 고화질 관제 레이더 스코프
 # ==========================================
-def render_high_quality_radar():
-    """우측 미니 관제 레이더 스코프 (겹침 방지 및 타겟 타겟팅 링 적용)"""
-    fig, ax = plt.subplots(figsize=(4.5, 4.0))
-    fig.patch.set_facecolor("#050811")
-    ax.set_facecolor("#050811")
+def render_pro_radar_scope():
+    """실제 관제탑 네온 패널 스타일의 고화질(DPI 130) 레이더 스코프"""
+    fig, ax = plt.subplots(figsize=(5.2, 5.0), dpi=130)
+    fig.patch.set_facecolor("#030712")
+    ax.set_facecolor("#030712")
 
-    # 활주로 가이드선 및 녹색 활주로 그리기
-    ax.axhline(0, color="#1e293b", linestyle="-", linewidth=2.5)
+    # 1. 방위각 레이더 방사선 (Heading Spokes)
+    for angle in [30, 60, 120, 150]:
+        rad = math.radians(angle)
+        x_end = 45 * math.cos(rad)
+        ax.plot(
+            [0, x_end],
+            [0, 45],
+            color="#1e293b",
+            linestyle=":",
+            linewidth=0.7,
+            alpha=0.6,
+        )
+        ax.plot(
+            [0, -x_end],
+            [0, 45],
+            color="#1e293b",
+            linestyle=":",
+            linewidth=0.7,
+            alpha=0.6,
+        )
+
+    # 2. 레이더 동심 거리선 (10NM, 20NM, 30NM, 40NM)
+    for dist in [10, 20, 30, 40]:
+        ax.axhline(
+            dist, color="#0284c7", linestyle="--", linewidth=0.7, alpha=0.35
+        )
+        ax.text(
+            0.3,
+            dist + 0.5,
+            f"{dist}NM",
+            color="#0284c7",
+            fontsize=6,
+            alpha=0.6,
+            fontweight="bold",
+        )
+
+    # 3. 활주로 바닥 및 활주로 선 정밀 표기
+    ax.axhline(0, color="#334155", linestyle="-", linewidth=2.0)
 
     for i in range(1, 11):
-        ax.plot([i, i], [0, -2.5], color="#00ff66", linewidth=4.5, alpha=0.9)
+        ax.plot([i, i], [0, -3.0], color="#00ff66", linewidth=4.0, alpha=0.9)
         ax.text(
             i,
-            -5.5,
+            -6.5,
             f"R{i:02d}",
             color="#00ff66",
             fontsize=6.5,
@@ -433,10 +471,10 @@ def render_high_quality_radar():
         )
 
     if st.session_state.emg_runway_open:
-        ax.plot([11, 11], [0, -2.5], color="#ff3344", linewidth=4.5, alpha=0.9)
+        ax.plot([11, 11], [0, -3.0], color="#ff3344", linewidth=4.0, alpha=0.9)
         ax.text(
             11,
-            -5.5,
+            -6.5,
             "EMG",
             color="#ff3344",
             fontsize=6.5,
@@ -444,13 +482,7 @@ def render_high_quality_radar():
             fontweight="bold",
         )
 
-    # 레이더 격자 동심선 (10NM ~ 40NM)
-    for dist in [10, 20, 30, 40]:
-        ax.axhline(
-            dist, color="#00f3ff", linestyle="--", linewidth=0.6, alpha=0.25
-        )
-
-    # 비행기 표시 및 겹침 방지 오프셋 알고리즘
+    # 4. 항공기 블립(Blip) 및 데이터 블록 (리더 라인 적용)
     for idx, p in enumerate(st.session_state.planes):
         cat = p.get("category", "ARR")
         status = p.get("status", "")
@@ -459,7 +491,7 @@ def render_high_quality_radar():
         dist = p.get("distance", 0.0)
         req_lvl = p.get("req_level", "NORMAL")
 
-        # 활주로 위치 지정
+        # 활주로 위치 계산
         rwy_str = p.get("assigned_runway")
         if rwy_str and "RWY" in rwy_str:
             try:
@@ -471,7 +503,7 @@ def render_high_quality_radar():
         else:
             r_x = (abs(hash(cs)) % 10) + 1
 
-        # 색상 선별
+        # 네온 색상 스키마
         if req_lvl == "EMERGENCY" or fuel <= 20:
             p_color = "#ff3344"
             badge = "🚨"
@@ -485,75 +517,128 @@ def render_high_quality_radar():
             p_color = "#00f3ff"
             badge = "✈️"
 
-        # 글자 겹침 방지 오프셋 계산 (좌우 및 위아래 교차 번갈아 배치)
-        x_offset = 0.25 if (idx % 2 == 0) else -1.65
-        y_offset = 0.6 if (idx % 3 == 0) else (-0.6 if idx % 3 == 1 else 0.0)
+        # 지능형 겹침 방지 오프셋
+        x_off = 0.8 if (idx % 2 == 0) else -2.2
+        y_off = 1.2 if (idx % 3 == 0) else (-1.2 if idx % 3 == 1 else 0.0)
 
         if cat == "ARR":
-            ax.plot(r_x, dist, marker="v", color=p_color, markersize=7)
+            # 블립 파수선
+            ax.plot(
+                r_x,
+                dist,
+                marker="v",
+                color=p_color,
+                markersize=8,
+                markeredgecolor="white",
+                markeredgewidth=0.5,
+            )
 
-            # 선택된 비행기 🎯 조준 링 표시
+            # 🎯 선택된 타겟 크로스헤어 박스 (Crosshair Target Reticle)
             if st.session_state.selected_target == cs:
-                circle = plt.Circle(
-                    (r_x, dist),
-                    1.8,
+                rect = plt.Rectangle(
+                    (r_x - 0.7, dist - 1.2),
+                    1.4,
+                    2.4,
                     color="#00f3ff",
                     fill=False,
+                    linewidth=1.8,
                     linestyle="-",
-                    linewidth=2.0,
                 )
-                ax.add_patch(circle)
-                ax.plot(r_x, dist, marker="o", color="#00f3ff", markersize=10)
+                ax.add_patch(rect)
+                ax.plot(
+                    [r_x - 1.2, r_x + 1.2],
+                    [dist, dist],
+                    color="#00f3ff",
+                    linewidth=0.8,
+                )
+                ax.plot(
+                    [r_x, r_x],
+                    [dist - 1.8, dist + 1.8],
+                    color="#00f3ff",
+                    linewidth=0.8,
+                )
 
+            # 리더 라인 (데이터 블록 연결 선)
+            ax.plot(
+                [r_x, r_x + x_off * 0.5],
+                [dist, dist + y_off * 0.5],
+                color=p_color,
+                linewidth=0.8,
+                alpha=0.7,
+            )
+
+            # 데이터 블록 텍스트
             ax.text(
-                r_x + x_offset,
-                dist + y_offset,
-                f"{badge}{cs}\n({fuel:.0f}%)",
+                r_x + x_off,
+                dist + y_off,
+                f"{badge}{cs}\nFL{int(dist*10):03d} | {fuel:.0f}%",
                 color=p_color,
                 fontsize=6.5,
                 fontweight="bold",
                 va="center",
+                bbox=dict(
+                    boxstyle="round,pad=0.2",
+                    facecolor="#030712",
+                    edgecolor=p_color,
+                    alpha=0.7,
+                    lw=0.5,
+                ),
             )
 
-            # 착륙 접근 유도 가이드 라인
+            # 착륙 접근 유도선
             if status == "착륙 접근 중":
                 ax.plot(
                     [r_x, r_x],
                     [dist, 0],
                     color=p_color,
                     linestyle=":",
-                    linewidth=1.3,
-                    alpha=0.85,
+                    linewidth=1.4,
+                    alpha=0.9,
                 )
 
         else:
-            dep_y = -1.2 if status != "이륙 가속 중" else 6.0
-            ax.plot(r_x, dep_y, marker="^", color=p_color, markersize=7)
+            dep_y = -1.5 if status != "이륙 가속 중" else 7.0
+            ax.plot(
+                r_x,
+                dep_y,
+                marker="^",
+                color=p_color,
+                markersize=8,
+                markeredgecolor="white",
+                markeredgewidth=0.5,
+            )
 
             if st.session_state.selected_target == cs:
-                circle = plt.Circle(
-                    (r_x, dep_y),
-                    1.8,
+                rect = plt.Rectangle(
+                    (r_x - 0.7, dep_y - 1.2),
+                    1.4,
+                    2.4,
                     color="#00f3ff",
                     fill=False,
-                    linestyle="-",
-                    linewidth=2.0,
+                    linewidth=1.8,
                 )
-                ax.add_patch(circle)
+                ax.add_patch(rect)
 
             ax.text(
-                r_x + x_offset,
-                dep_y + y_offset,
-                f"🛫{cs}",
+                r_x + x_off,
+                dep_y + y_off,
+                f"🛫{cs}\nDEP-REQ",
                 color=p_color,
                 fontsize=6.5,
                 fontweight="bold",
                 va="center",
+                bbox=dict(
+                    boxstyle="round,pad=0.2",
+                    facecolor="#030712",
+                    edgecolor=p_color,
+                    alpha=0.7,
+                    lw=0.5,
+                ),
             )
 
     max_x = 12 if st.session_state.emg_runway_open else 11
     ax.set_xlim(0, max_x)
-    ax.set_ylim(-8, 42)
+    ax.set_ylim(-9, 44)
     ax.axis("off")
 
     plt.tight_layout()
@@ -562,22 +647,22 @@ def render_high_quality_radar():
 
 
 # ==========================================
-# 5. 실시간 엔진 업데이트 수행
+# 5. 실시간 엔진 업데이트
 # ==========================================
 update_realtime_engine()
 
 
 # ==========================================
-# 6. 메인 UI 화면 구성
+# 6. 한눈에 들어오는 3열 메인 대시보드 레이아웃
 # ==========================================
-st.title("⚡ ATC 실시간 대규모 이착륙 통합 관제 시뮬레이터")
+st.title("⚡ Pro ATC 실시간 대규모 통합 관제탑 대시보드")
 
 # 🔴 [임무 실패 / GAME OVER 화면]
 if st.session_state.game_over:
     st.error("💥 [GAME OVER / 관제 실패]")
     st.subheader(st.session_state.game_over_reason)
     st.write(
-        f"**최종 기록:** 착륙 성공 {st.session_state.landed_count}대 | 이륙 성공 {st.session_state.tookoff_count}대 | 점수: {st.session_state.score}점"
+        f"**최종 기록:** 착륙 성공 {st.session_state.landed_count}대 | 이륙 성공 {st.session_state.tookoff_count}대 | 최종 점수: {st.session_state.score}점"
     )
 
     if st.button(
@@ -592,8 +677,8 @@ if st.session_state.game_over:
         st.caption(log)
 
 elif not st.session_state.game_started:
-    st.warning(
-        "👋 오른쪽 레이더에서 타겟 비행기를 선택하면 세부 정보(탑승자 수, 출발지 등)가 표시됩니다."
+    st.info(
+        "👋 3열 대시보드로 구성되어 스크롤 없이 한눈에 레이더, 활주로, 파일럿 요청을 제어할 수 있습니다."
     )
     if st.button(
         "🚀 비상 관제 업무 개시", type="primary", use_container_width=True
@@ -602,31 +687,31 @@ elif not st.session_state.game_started:
         st.rerun()
 
 else:
-    # 관제탑 상단 대시보드
+    # 관제탑 최상단 요약 현황판
     m1, m2, m3, m4 = st.columns(4)
-    m1.metric("📊 현재 관제 점수", f"{st.session_state.score}점")
+    m1.metric("📊 현재 점수", f"{st.session_state.score}점")
     m2.metric("🛬 착륙 성공", f"{st.session_state.landed_count}대")
     m3.metric("🛫 이륙 성공", f"{st.session_state.tookoff_count}대")
-    m4.metric("✈️ 총 수용 항공기", f"{len(st.session_state.planes)}대")
+    m4.metric("✈️ 수용 항공기", f"{len(st.session_state.planes)}대")
 
     st.divider()
 
-    # 메인 2열 화면 (좌측: 파일럿 요청함 및 관제 조작 / 우측: 레이더 & 세부정보)
-    col_left, col_right = st.columns([1.65, 1.15])
+    # 3열 완벽 재배열 레이아웃 (좌: 파일럿 교신&관제버튼 / 중: 네온 레이더 / 우: 활주로&타겟카드)
+    col1, col2, col3 = st.columns([1.1, 1.25, 0.95])
 
     available_runways = RUNWAY_LIST.copy()
     if st.session_state.emg_runway_open:
         available_runways.append("EMG-01")
 
     # ----------------------------------------------------
-    # [좌측] 📡 파일럿 실시간 요구사항 센터 & 착/이륙 제어
+    # [1열] 📡 파일럿 긴급 요청 수신함 & 🛬 착/이륙 지시 패널
     # ----------------------------------------------------
-    with col_left:
-        # 1. 파일럿 요구사항 실시간 메시지 박스
+    with col1:
+        # 파일럿 메시지 박스
         st.markdown(
             """
         <div class="msg-box">
-            <div class="msg-title">📡 파일럿 실시간 교신 및 긴급 요구사항 수신함</div>
+            <div class="msg-title">📡 파일럿 교신 및 요구사항 수신함</div>
         """,
             unsafe_allow_html=True,
         )
@@ -649,7 +734,7 @@ else:
                 )
         st.markdown("</div>", unsafe_allow_html=True)
 
-        # 2. 착륙 및 이륙 비행기 제어 구역
+        # 비행기 원클릭 지시 구역
         arr_planes = [
             p for p in st.session_state.planes if p.get("category") == "ARR"
         ]
@@ -657,12 +742,11 @@ else:
             p for p in st.session_state.planes if p.get("category") == "DEP"
         ]
 
-        sub_col1, sub_col2 = st.columns(2)
+        sub1, sub2 = st.columns(2)
 
-        # 🛬 착륙 요청 비행기
-        with sub_col1:
-            st.subheader(f"🛬 착륙 관제 ({len(arr_planes)}대)")
-
+        # 착륙 요청
+        with sub1:
+            st.caption(f"🛬 착륙 요청 ({len(arr_planes)}대)")
             for p in arr_planes:
                 status = p.get("status", "착륙 요청 중")
                 fuel_val = max(0.0, p.get("fuel", 0.0))
@@ -680,10 +764,10 @@ else:
                     f"""
                     <div class="arr-card">
                         <div style="display:flex; justify-content:space-between; align-items:center;">
-                            <span class="plane-title-arr">✈️ {p['callsign']} <small>({p.get('type')})</small></span>
+                            <span class="plane-title-arr">✈️ {p['callsign']}</span>
                             {badge}
                         </div>
-                        <div class="plane-sub">연료: <b style="color:#ef4444;">{fuel_val:.1f}%</b> | 거리: {max(0.0, p.get('distance',0)):.1f}NM</div>
+                        <div class="plane-sub">연료: <b style="color:#ef4444;">{fuel_val:.1f}%</b> | {max(0.0, p.get('distance',0)):.1f}NM</div>
                     </div>
                     """,
                     unsafe_allow_html=True,
@@ -694,7 +778,7 @@ else:
                 )
 
                 if status in ["착륙 요청 중", "상공 대기 중"]:
-                    b1, b2, b3 = st.columns([1.6, 1, 1])
+                    b1, b2, b3 = st.columns([1.5, 1, 1])
                     with b1:
                         sel_rwy = st.selectbox(
                             "활주로",
@@ -704,7 +788,7 @@ else:
                         )
                     with b2:
                         if st.button(
-                            "✅ 착륙",
+                            "✅",
                             key=f"app_{p['callsign']}",
                             use_container_width=True,
                         ):
@@ -712,7 +796,7 @@ else:
                             st.rerun()
                     with b3:
                         if st.button(
-                            "🛑 거절",
+                            "🛑",
                             key=f"rej_{p['callsign']}",
                             use_container_width=True,
                         ):
@@ -720,10 +804,9 @@ else:
                             st.rerun()
                 st.write("")
 
-        # 🛫 이륙 요청 비행기
-        with sub_col2:
-            st.subheader(f"🛫 이륙 관제 ({len(dep_planes)}대)")
-
+        # 이륙 요청
+        with sub2:
+            st.caption(f"🛫 이륙 요청 ({len(dep_planes)}대)")
             for p in dep_planes:
                 status = p.get("status", "이륙 요청 중")
                 delay_sec = int(p.get("delay", 0))
@@ -739,17 +822,17 @@ else:
                     f"""
                     <div class="dep-card">
                         <div style="display:flex; justify-content:space-between; align-items:center;">
-                            <span class="plane-title-dep">✈️ {p['callsign']} <small>({p.get('type')})</small></span>
+                            <span class="plane-title-dep">✈️ {p['callsign']}</span>
                             {badge}
                         </div>
-                        <div class="plane-sub">대기시간: <b style="color:#f59e0b;">{delay_sec}초 지연</b></div>
+                        <div class="plane-sub">대기: <b style="color:#f59e0b;">{delay_sec}초 지연</b></div>
                     </div>
                     """,
                     unsafe_allow_html=True,
                 )
 
                 if status in ["이륙 요청 중", "지상 대기 중"]:
-                    b1, b2, b3 = st.columns([1.6, 1, 1])
+                    b1, b2, b3 = st.columns([1.5, 1, 1])
                     with b1:
                         sel_rwy = st.selectbox(
                             "활주로",
@@ -759,7 +842,7 @@ else:
                         )
                     with b2:
                         if st.button(
-                            "🚀 이륙",
+                            "🚀",
                             key=f"app_{p['callsign']}",
                             use_container_width=True,
                         ):
@@ -767,7 +850,7 @@ else:
                             st.rerun()
                     with b3:
                         if st.button(
-                            "🛑 대기",
+                            "🛑",
                             key=f"rej_{p['callsign']}",
                             use_container_width=True,
                         ):
@@ -776,15 +859,22 @@ else:
                 st.write("")
 
     # ----------------------------------------------------
-    # [우측] 🎯 미니 레이더 지도 및 선택 항공기 세부 정보
+    # [2열 - 중앙] 📡 메인 Pro ATC 관제 레이더 스코프
     # ----------------------------------------------------
-    with col_right:
-        # 1. 타겟 선택 드롭다운
+    with col2:
+        st.subheader("📡 메인 관제 레이더 스코프")
+        render_pro_radar_scope()
+
+    # ----------------------------------------------------
+    # [3열 - 우측] 🎯 타겟 세부정보 & 🛣️ 10개 활주로 현황
+    # ----------------------------------------------------
+    with col3:
+        # 타겟 선택 드롭다운
         all_callsigns = [p["callsign"] for p in st.session_state.planes]
         target_options = ["선택 안 함"] + all_callsigns
 
         selected_cs = st.selectbox(
-            "🎯 레이더 타겟 항공기 조회 (선택 시 링 표시)",
+            "🎯 타겟 비행기 조회 (선택 시 링 표시)",
             target_options,
             index=(
                 target_options.index(st.session_state.selected_target)
@@ -796,7 +886,7 @@ else:
             selected_cs if selected_cs != "선택 안 함" else None
         )
 
-        # 2. 선택된 비행기 상세정보 카드
+        # 선택 비행기 상세정보
         if st.session_state.selected_target:
             target_plane = next(
                 (
@@ -810,8 +900,8 @@ else:
                 st.markdown(
                     f"""
                     <div class="detail-card">
-                        <h4 style="margin:0 0 5px 0; color:#38bdf8;">✈️ {target_plane['callsign']} 정보</h4>
-                        <div style="font-size:12px; color:#f1f5f9; line-height:1.5;">
+                        <h5 style="margin:0 0 4px 0; color:#38bdf8;">✈️ {target_plane['callsign']} 상세정보</h5>
+                        <div style="font-size:11px; color:#f1f5f9; line-height:1.4;">
                             <b>기종:</b> {target_plane['type']}<br>
                             <b>👥 탑승자 수:</b> {target_plane['passengers']}명<br>
                             <b>📍 출발지:</b> {target_plane['origin']}<br>
@@ -823,12 +913,8 @@ else:
                     unsafe_allow_html=True,
                 )
 
-        # 3. 레이더 시각화 렌더링
-        st.subheader("📡 관제 레이더 스코프")
-        render_high_quality_radar()
-
-        # 4. 활주로 상태 (10개)
-        st.subheader("🛣️ 활주로 현황")
+        # 활주로 10개 현황
+        st.subheader("🛣️ 활주로 상태 (10개)")
         now = time.time()
         rwy_cols = st.columns(2)
         for idx, r_name in enumerate(available_runways):
@@ -846,7 +932,7 @@ else:
                         unsafe_allow_html=True,
                     )
                     if st.button(
-                        f"🧹 비우기",
+                        f"🧹",
                         key=f"clear_{r_name}",
                         use_container_width=True,
                     ):
@@ -865,7 +951,7 @@ else:
         st.write("")
         if not st.session_state.emg_runway_open:
             if st.button(
-                "🚨 01E 비상 활주로 추가 개설",
+                "🚨 01E 비상 활주로 개설",
                 type="primary",
                 use_container_width=True,
             ):
@@ -876,7 +962,7 @@ else:
                 st.rerun()
 
         st.divider()
-        st.caption("📜 관제 실시간 교신 로그")
+        st.caption("📜 실시간 관제 교신 로그")
         for log in reversed(st.session_state.logs[-5:]):
             st.caption(log)
 
