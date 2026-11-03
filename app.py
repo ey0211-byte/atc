@@ -222,3 +222,361 @@ def update_realtime_engine():
         elif status == "이륙 가속 중":
             p["takeoff_timer"] -= dt
             if p["takeoff_timer"] <= 0:
+                st.session_state.tookoff_count += 1
+                st.session_state.score += 15
+                st.session_state.logs.append(
+                    f"🛫 [{p['callsign']}] {p.get('assigned_runway')} 성공적으로 이륙 완료!"
+                )
+                continue
+
+        # 3. 상공 착륙 대기 비행기 (초당 0.6% 감소 ➔ 약 1.6초에 1% 감소)
+        elif cat == "ARR":
+            p["fuel"] -= 0.6 * dt
+
+            # 🔴 [임무 실패 조건] 단 1대라도 기름 0% 도달 시 게임 오버
+            if p["fuel"] <= 0:
+                p["fuel"] = 0.0
+                st.session_state.game_over = True
+                st.session_state.game_over_reason = f"💥 [{p['callsign']}] 항공기의 연료가 0%가 되어 추락했습니다! (관제 실패)"
+                st.session_state.logs.append(st.session_state.game_over_reason)
+                return
+
+        # 4. 지상 이륙 대기 비행기
+        elif cat == "DEP":
+            p["delay"] += dt
+
+        remaining_planes.append(p)
+
+    st.session_state.planes = remaining_planes
+
+    # 5초마다 신규 항공기 스폰 (최대 16대 유지)
+    if (
+        now - st.session_state.last_spawn_time > 5.0
+        and len(st.session_state.planes) < 16
+    ):
+        spawn_plane()
+        st.session_state.last_spawn_time = now
+
+
+def approve_action(callsign, target_runway):
+    now = time.time()
+    if st.session_state.runways_busy_until[target_runway] > now:
+        st.warning(f"🚫 {target_runway} 활주로는 현재 사용 중입니다!")
+        return
+
+    plane = next(
+        (p for p in st.session_state.planes if p["callsign"] == callsign), None
+    )
+    if not plane:
+        return
+
+    last_type = st.session_state.last_landed_type[target_runway]
+    occupancy_seconds = 7.0  # 기본 7초 점유
+
+    if last_type == "Heavy(대형)" and plane.get("type") in [
+        "Medium(중형)",
+        "Light(소형)",
+    ]:
+        occupancy_seconds += 3.0  # 후류 와류 대기 3초 추가
+        st.toast(
+            f"⚠️ [{target_runway}] 선행 대형기로 인해 점유시간 +3초", icon="⚠️"
+        )
+
+    st.session_state.runways_busy_until[target_runway] = now + occupancy_seconds
+    st.session_state.last_landed_type[target_runway] = plane.get("type")
+    plane["assigned_runway"] = target_runway
+
+    if plane.get("category") == "ARR":
+        plane["status"] = "착륙 접근 중"
+        log_msg = f"🛬 [착륙 허가] {callsign} ➔ {target_runway}"
+    else:
+        plane["status"] = "이륙 가속 중"
+        plane["takeoff_timer"] = 5.0
+        log_msg = f"🛫 [이륙 허가] {callsign} ➔ {target_runway}"
+
+    st.session_state.logs.append(log_msg)
+    st.toast(log_msg, icon="📡")
+
+
+def reject_action(callsign):
+    plane = next(
+        (p for p in st.session_state.planes if p["callsign"] == callsign), None
+    )
+    if not plane:
+        return
+
+    if plane.get("category") == "ARR":
+        plane["status"] = "상공 대기 중"
+        log_msg = f"🛑 [착륙 대기] {callsign} 상공 궤도 선회 지시"
+    else:
+        plane["status"] = "지상 대기 중"
+        log_msg = f"🛑 [이륙 지연] {callsign} 유도로 대기 지시"
+
+    st.session_state.logs.append(log_msg)
+    st.toast(log_msg, icon="🛑")
+
+
+def force_clear_runway(runway_name):
+    st.session_state.runways_busy_until[runway_name] = 0.0
+    log_msg = f"🧹 [강제 비우기] {runway_name} 활주로가 비상 개방되었습니다."
+    st.session_state.logs.append(log_msg)
+    st.toast(log_msg, icon="🧹")
+
+
+# ==========================================
+# 4. 실시간 엔진 업데이트 수행
+# ==========================================
+update_realtime_engine()
+
+
+# ==========================================
+# 5. 화면 구성
+# ==========================================
+st.title("⚡ ATC 실시간 대규모 이착륙 통합 관제 시뮬레이터")
+
+# 🔴 [임무 실패 / GAME OVER 화면]
+if st.session_state.game_over:
+    st.error("💥 [GAME OVER / 임무 실패]")
+    st.subheader(st.session_state.game_over_reason)
+    st.write(
+        f"**최종 관제 성과:** 착륙 성공 {st.session_state.landed_count}대 | 이륙 성공 {st.session_state.tookoff_count}대 | 점수: {st.session_state.score}점"
+    )
+
+    if st.button(
+        "🔄 관제 업무 다시 도전하기", type="primary", use_container_width=True
+    ):
+        init_game()
+        st.rerun()
+
+    st.divider()
+    st.subheader("📜 최종 관제 교신 로그")
+    for log in reversed(st.session_state.logs[-10:]):
+        st.caption(log)
+
+elif not st.session_state.game_started:
+    st.warning(
+        "⚠️ 실시간으로 비행기의 기름이 감소합니다! 연료가 0%가 되면 즉시 임무 실패입니다."
+    )
+    if st.button(
+        "🚀 비상 관제 업무 개시", type="primary", use_container_width=True
+    ):
+        init_game()
+        st.rerun()
+
+else:
+    # 관제탑 상단 요약
+    m1, m2, m3, m4 = st.columns(4)
+    m1.metric("📊 현재 점수", f"{st.session_state.score}점")
+    m2.metric("🛬 착륙 성공", f"{st.session_state.landed_count}대")
+    m3.metric("🛫 이륙 성공", f"{st.session_state.tookoff_count}대")
+    m4.metric("✈️ 상공/지상 비행기", f"{len(st.session_state.planes)}대")
+
+    st.divider()
+
+    c1, c2 = st.columns([2, 1])
+    with c1:
+        if not st.session_state.emg_runway_open:
+            if st.button(
+                "🚨 [비상] 01E 비상 활주로 추가 개설",
+                type="primary",
+                use_container_width=True,
+            ):
+                st.session_state.emg_runway_open = True
+                st.session_state.logs.append(
+                    "🚨 [비상 활주로] EMG-01 활주로가 개설되었습니다!"
+                )
+                st.rerun()
+        else:
+            st.success("🚨 비상 활주로(EMG-01) 가동 중")
+    with c2:
+        if st.button("🔄 리셋", use_container_width=True):
+            init_game()
+            st.rerun()
+
+    st.write("")
+
+    col_left, col_right = st.columns([2.3, 1])
+
+    available_runways = RUNWAY_LIST.copy()
+    if st.session_state.emg_runway_open:
+        available_runways.append("EMG-01")
+
+    # ----------------------------------------------------
+    # [좌측] 🛬 착륙 비행기 & 🛫 이륙 비행기 실시간 현황판
+    # ----------------------------------------------------
+    with col_left:
+        arr_planes = [
+            p for p in st.session_state.planes if p.get("category") == "ARR"
+        ]
+        dep_planes = [
+            p for p in st.session_state.planes if p.get("category") == "DEP"
+        ]
+
+        sub_col1, sub_col2 = st.columns(2)
+
+        # 🛬 착륙 요청 비행기 (연료 실시간 표시)
+        with sub_col1:
+            st.subheader(f"🛬 착륙 관제 ({len(arr_planes)}대)")
+
+            for p in arr_planes:
+                status = p.get("status", "착륙 요청 중")
+                fuel_val = max(0.0, p.get("fuel", 0.0))
+
+                if fuel_val <= 20.0:
+                    badge = '<span class="badge-danger">🚨 연료 위급</span>'
+                elif status == "착륙 접근 중":
+                    badge = '<span class="badge-success">🛬 접근 중</span>'
+                else:
+                    badge = '<span class="badge-arr">📡 착륙 요청</span>'
+
+                st.markdown(
+                    f"""
+                    <div class="arr-card">
+                        <div style="display:flex; justify-content:space-between; align-items:center;">
+                            <span class="plane-title-arr">✈️ {p['callsign']} <small>({p.get('type')})</small></span>
+                            {badge}
+                        </div>
+                        <div class="plane-sub">연료: <b style="color:#ef4444;">{fuel_val:.1f}%</b> | 거리: {max(0.0, p.get('distance',0)):.1f}NM</div>
+                    </div>
+                    """,
+                    unsafe_allow_html=True,
+                )
+
+                st.progress(
+                    fuel_val / 100.0, text=f"실시간 기름: {fuel_val:.1f}%"
+                )
+
+                if status in ["착륙 요청 중", "상공 대기 중"]:
+                    b1, b2, b3 = st.columns([1.8, 1, 1])
+                    with b1:
+                        sel_rwy = st.selectbox(
+                            "활주로",
+                            available_runways,
+                            key=f"sel_arr_{p['callsign']}",
+                            label_visibility="collapsed",
+                        )
+                    with b2:
+                        if st.button(
+                            "✅ 착륙",
+                            key=f"app_{p['callsign']}",
+                            use_container_width=True,
+                        ):
+                            approve_action(p["callsign"], sel_rwy)
+                            st.rerun()
+                    with b3:
+                        if st.button(
+                            "🛑 거절",
+                            key=f"rej_{p['callsign']}",
+                            use_container_width=True,
+                        ):
+                            reject_action(p["callsign"])
+                            st.rerun()
+                st.write("")
+
+        # 🛫 이륙 요청 비행기
+        with sub_col2:
+            st.subheader(f"🛫 이륙 관제 ({len(dep_planes)}대)")
+
+            for p in dep_planes:
+                status = p.get("status", "이륙 요청 중")
+                delay_sec = int(p.get("delay", 0))
+
+                if status == "이륙 가속 중":
+                    badge = '<span class="badge-success">🛫 이륙 중</span>'
+                else:
+                    badge = '<span class="badge-dep">📡 이륙 요청</span>'
+
+                st.markdown(
+                    f"""
+                    <div class="dep-card">
+                        <div style="display:flex; justify-content:space-between; align-items:center;">
+                            <span class="plane-title-dep">✈️ {p['callsign']} <small>({p.get('type')})</small></span>
+                            {badge}
+                        </div>
+                        <div class="plane-sub">지상 대기 시간: <b style="color:#f59e0b;">{delay_sec}초 지연</b></div>
+                    </div>
+                    """,
+                    unsafe_allow_html=True,
+                )
+
+                if status in ["이륙 요청 중", "지상 대기 중"]:
+                    b1, b2, b3 = st.columns([1.8, 1, 1])
+                    with b1:
+                        sel_rwy = st.selectbox(
+                            "활주로",
+                            available_runways,
+                            key=f"sel_dep_{p['callsign']}",
+                            label_visibility="collapsed",
+                        )
+                    with b2:
+                        if st.button(
+                            "🚀 이륙",
+                            key=f"app_{p['callsign']}",
+                            use_container_width=True,
+                        ):
+                            approve_action(p["callsign"], sel_rwy)
+                            st.rerun()
+                    with b3:
+                        if st.button(
+                            "🛑 대기",
+                            key=f"rej_{p['callsign']}",
+                            use_container_width=True,
+                        ):
+                            reject_action(p["callsign"])
+                            st.rerun()
+                st.write("")
+
+    # ----------------------------------------------------
+    # [우측] 10개 활주로 실시간 타이머
+    # ----------------------------------------------------
+    with col_right:
+        st.subheader("🛣️ 활주로 실시간 상태")
+
+        rwy_display_list = RUNWAY_LIST.copy()
+        if st.session_state.emg_runway_open:
+            rwy_display_list.append("EMG-01")
+
+        now = time.time()
+        rwy_cols = st.columns(2)
+        for idx, r_name in enumerate(rwy_display_list):
+            busy_until = st.session_state.runways_busy_until.get(r_name, 0.0)
+            remaining_sec = max(0.0, busy_until - now)
+
+            with rwy_cols[idx % 2]:
+                if remaining_sec > 0:
+                    st.markdown(
+                        f"""
+                        <div class="runway-card" style="border-color:#ef4444; background-color:#2a1215;">
+                            <b style="color:#f87171;">🔴 {r_name}</b><br>
+                            <span style="color:#fca5a5; font-size:10px;">사용 중 ({remaining_sec:.1f}초)</span>
+                        </div>
+                        """,
+                        unsafe_allow_html=True,
+                    )
+                    if st.button(
+                        f"🧹 비우기",
+                        key=f"clear_{r_name}",
+                        use_container_width=True,
+                    ):
+                        force_clear_runway(r_name)
+                        st.rerun()
+                else:
+                    st.markdown(
+                        f"""
+                        <div class="runway-card" style="border-color:#10b981; background-color:#062319;">
+                            <b style="color:#34d399;">🟢 {r_name}</b><br>
+                            <span style="color:#6ee7b7; font-size:10px;">즉시 사용 가능</span>
+                        </div>
+                        """,
+                        unsafe_allow_html=True,
+                    )
+
+        st.divider()
+
+        st.subheader("📜 실시간 관제 로그")
+        for log in reversed(st.session_state.logs[-8:]):
+            st.caption(log)
+
+    # 0.3초마다 자동 재실행하여 실시간 연출
+    time.sleep(0.3)
+    st.rerun()
