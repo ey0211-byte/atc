@@ -6,7 +6,7 @@ import pandas as pd
 import streamlit as st
 
 # ==========================================
-# 1. 초고대비 순백색(White) 폰트 & Pro ATC 스타일
+# 1. 고대비 순백색(White) 폰트 & Pro ATC 스타일
 # ==========================================
 st.set_page_config(
     page_title="Pro Integrated ATC 3D 관제탑 시뮬레이터",
@@ -28,7 +28,7 @@ st.markdown(
         color: #ffffff !important;
     }
 
-    /* 스트림릿 버튼 강제 스타일 (글자색 100% 흰색 유지) */
+    /* 스트림릿 버튼 강제 스타일 */
     div.stButton > button {
         background-color: #0f172a !important;
         color: #ffffff !important;
@@ -48,23 +48,6 @@ st.markdown(
         background-color: #b91c1c !important;
         border-color: #ef4444 !important;
         color: #ffffff !important;
-    }
-
-    /* 메시지 박스 */
-    .msg-box {
-        background-color: #090d16;
-        border: 1px solid #0284c7;
-        border-radius: 6px;
-        padding: 8px;
-        margin-bottom: 8px;
-    }
-    .msg-title {
-        color: #38bdf8 !important;
-        font-size: 12px;
-        font-weight: bold;
-        margin-bottom: 4px;
-        border-bottom: 1px solid #1e293b;
-        padding-bottom: 2px;
     }
 
     /* 카드 스타일 */
@@ -101,8 +84,8 @@ st.markdown(
         color: #ffffff !important;
     }
 
-    /* 게이트 현황 박스 */
-    .gate-box {
+    /* 현황 카드 */
+    .info-card {
         background-color: #0b1329;
         border: 1px solid #334155;
         border-radius: 4px;
@@ -113,10 +96,6 @@ st.markdown(
     }
 
     .stProgress > div > div > div > div { height: 4px !important; }
-
-    .badge-danger { background-color: #dc2626; color: #ffffff !important; padding: 1px 4px; font-size: 9.5px; border-radius: 3px; font-weight: bold; }
-    .badge-warn { background-color: #d97706; color: #ffffff !important; padding: 1px 4px; font-size: 9.5px; border-radius: 3px; font-weight: bold; }
-    .badge-success { background-color: #16a34a; color: #ffffff !important; padding: 1px 4px; font-size: 9.5px; border-radius: 3px; font-weight: bold; }
     </style>
 """,
     unsafe_allow_html=True,
@@ -275,7 +254,7 @@ def init_game():
     st.session_state.last_tick_time = now
     st.session_state.last_spawn_time = now
     st.session_state.logs = [
-        "🚨 [통합 관제 개시] 섹터별 실시간 전용 레이더 및 선명한 가독성 모드가 가동됩니다."
+        "🚨 [통합 관제 개시] 섹터별 실시간 맞춤 화면 및 레이더 시스템이 가동되었습니다."
     ]
 
     for _ in range(8):
@@ -289,7 +268,7 @@ def run_ai_auto_controller(now):
     if not st.session_state.ai_auto_pilot:
         return
 
-    # 1. 접근/활주로 AI 관제 (연료 부족 비행기 착륙 지원)
+    # 1. 접근/활주로 AI 관제
     for p in st.session_state.planes:
         if p["phase"] == "APPROACH" and p["status"] in [
             "접근 요청 중",
@@ -306,7 +285,7 @@ def run_ai_auto_controller(now):
                         )
                         break
 
-        # 2. 지상 관제 AI 지원 (게이트 자동 유도)
+        # 2. 지상 관제 AI 지원
         elif p["phase"] == "TAXI_TO_GATE" and p["status"] == "게이트 배정 대기":
             empty_gates = [
                 g
@@ -322,7 +301,7 @@ def run_ai_auto_controller(now):
                     f"🤖 [AI 지상 관제] {p['callsign']} ➔ {target_g} 이동 지시"
                 )
 
-        # 3. 항로 관제 AI 지원 (자동 이양)
+        # 3. 항로 관제 AI 지원
         elif (
             p["phase"] == "ENROUTE_CLIMB"
             and p["status"] == "관제권 이양(Handoff) 요청"
@@ -427,16 +406,14 @@ def update_realtime_engine():
 # 5. 📡 섹터별 3가지 전용 레이더 시각화 렌더러
 # ==========================================
 def render_sector_specific_radar():
-    """선택된 섹터에 따라 완전히 다른 디자인의 레이더 화면 출력"""
+    """선택된 섹터에 따라 완전히 다른 레이더 모드 출력"""
     sector = st.session_state.active_sector
 
     fig, ax = plt.subplots(figsize=(5.2, 4.8), dpi=130)
     fig.patch.set_facecolor("#030712")
     ax.set_facecolor("#030712")
 
-    # ----------------------------------------------------
-    # TYPE 1: 📡 [접근/활주로 관제 레이더] (활주로 + 접근 궤도)
-    # ----------------------------------------------------
+    # TYPE 1: 📡 접근/활주로 관제 레이더
     if "1. 접근" in sector:
         for r in [10, 20, 30, 40]:
             ax.axhline(
@@ -464,7 +441,6 @@ def render_sector_specific_radar():
                 fontweight="bold",
             )
 
-        # 접근 중인 비행기 표기
         for p in st.session_state.planes:
             if p.get("phase") == "APPROACH":
                 cs = p["callsign"]
@@ -498,9 +474,7 @@ def render_sector_specific_radar():
         ax.set_xlim(0, 11)
         ax.set_ylim(-8, 44)
 
-    # ----------------------------------------------------
-    # TYPE 2: 🚜 [지상/게이트 ASDE 레이더] (활주로X -> 터미널 + 게이트 + 유도로)
-    # ----------------------------------------------------
+    # TYPE 2: 🚜 지상/게이트 ASDE 레이더
     elif "2. 지상" in sector:
         ax.set_title(
             "[ASDE Ground Movement Radar Scope]",
@@ -509,7 +483,6 @@ def render_sector_specific_radar():
             fontweight="bold",
         )
 
-        # 터미널 건물 그리기
         rect = plt.Rectangle(
             (1, 1), 9, 4, facecolor="#1e293b", edgecolor="#0284c7", linewidth=1.5
         )
@@ -524,7 +497,6 @@ def render_sector_specific_radar():
             fontweight="bold",
         )
 
-        # Gate 01 ~ 08 표시 (터미널 아래쪽)
         for i in range(1, 9):
             g_name = f"Gate {i:02d}"
             occ = st.session_state.gates_occupied.get(g_name)
@@ -542,14 +514,12 @@ def render_sector_specific_radar():
                 fontweight="bold",
             )
 
-        # 유도로 (Taxiways A & B)
         ax.axhline(-6, color="#eab308", linestyle="-.", linewidth=1.5)
         ax.text(0.5, -5.5, "TAXIWAY A", color="#eab308", fontsize=6)
 
         ax.axhline(-10, color="#eab308", linestyle="-.", linewidth=1.5)
         ax.text(0.5, -9.5, "TAXIWAY B", color="#eab308", fontsize=6)
 
-        # 지상 이동 비행기 표기
         for p in st.session_state.planes:
             phase = p.get("phase")
             if phase in ["TAXI_TO_GATE", "AT_GATE", "TAXI_TO_RWY"]:
@@ -578,9 +548,7 @@ def render_sector_specific_radar():
         ax.set_xlim(0, 11)
         ax.set_ylim(-13, 7)
 
-    # ----------------------------------------------------
-    # TYPE 3: ☁️ [항로/하늘 ACC 레이더] (지상/활주로 없음 -> 고고도 하늘 공역)
-    # ----------------------------------------------------
+    # TYPE 3: ☁️ 항로/하늘 ACC 레이더
     else:
         ax.set_title(
             "[En-Route Area Control Radar (RKRR Sector)]",
@@ -589,7 +557,6 @@ def render_sector_specific_radar():
             fontweight="bold",
         )
 
-        # 대공역 반경 동심원 (50NM, 100NM, 150NM)
         for ring in [10, 20, 30]:
             circle = plt.Circle(
                 (5.5, 20),
@@ -602,7 +569,6 @@ def render_sector_specific_radar():
             )
             ax.add_patch(circle)
 
-        # 웨이포인트(Waypoints) 표기
         for wp_name, wx, wy in WAYPOINTS:
             ax.scatter(wx, wy, color="#c084fc", marker="D", s=30)
             ax.text(
@@ -614,7 +580,6 @@ def render_sector_specific_radar():
                 fontweight="bold",
             )
 
-        # 고고도 항로 상승/이양 비행기 표기
         for p in st.session_state.planes:
             if p.get("phase") == "ENROUTE_CLIMB":
                 cs = p["callsign"]
@@ -660,7 +625,7 @@ update_realtime_engine()
 
 
 # ==========================================
-# 7. 메인 통합 UI 대시보드
+# 7. 메인 통합 UI 대시보드 (섹터별 맞춤 전환)
 # ==========================================
 st.title("⚡ Pro Integrated ATC 대규모 통합 관제탑 센터")
 
@@ -673,7 +638,7 @@ if st.session_state.game_over:
 
 elif not st.session_state.game_started:
     st.info(
-        "👋 상단 라디오 버튼으로 섹터를 바꾸면 관제 레이더 화면도 함께 실시간 전환됩니다."
+        "👋 섹터를 전환하면 좌측 제어판, 중앙 레이더, 우측 현황판이 완벽하게 맞춤 변경됩니다."
     )
     if st.button(
         "🚀 통합 관제 업무 개시", type="primary", use_container_width=True
@@ -682,7 +647,7 @@ elif not st.session_state.game_started:
         st.rerun()
 
 else:
-    # 대시보드 상단 요약
+    # 상단 요약
     m1, m2, m3, m4, m5 = st.columns(5)
     m1.metric("📊 현재 관제 점수", f"{st.session_state.score}점")
     m2.metric("🛬 착륙 성공", f"{st.session_state.landed_count}대")
@@ -694,7 +659,7 @@ else:
     bar_c1, bar_c2 = st.columns([3, 1])
     with bar_c1:
         st.session_state.active_sector = st.radio(
-            "📍 관제 구역 선택 (선택 시 레이더 자동 변경)",
+            "📍 관제 구역 선택 (선택 시 전체 화면 즉시 전환)",
             [
                 "📡 1. 접근/활주로 관제",
                 "🚜 2. 지상/게이트 관제",
@@ -710,12 +675,12 @@ else:
     st.divider()
 
     col_left, col_mid, col_right = st.columns([1.2, 1.1, 0.9])
+    now = time.time()
 
     # ----------------------------------------------------
-    # [좌측 열] 활성 섹터별 조작 제어 패널
+    # [좌측 열] 섹터별 조작 제어 패널
     # ----------------------------------------------------
     with col_left:
-        # SECTOR 1: 접근 / 활주로 관제
         if "1. 접근" in st.session_state.active_sector:
             st.subheader("📡 접근/활주로 관제 섹터")
 
@@ -763,7 +728,7 @@ else:
                             p["status"] = "착륙 접근 중"
                             p["assigned_runway"] = sel_rwy
                             st.session_state.runways_busy_until[sel_rwy] = (
-                                time.time() + 7.0
+                                now + 7.0
                             )
                             st.rerun()
 
@@ -787,7 +752,6 @@ else:
                     p["takeoff_timer"] = 5.0
                     st.rerun()
 
-        # SECTOR 2: 지상 / 게이트 관제
         elif "2. 지상" in st.session_state.active_sector:
             st.subheader("🚜 지상/게이트 관제 섹터")
 
@@ -871,7 +835,6 @@ else:
                         p["assigned_runway"] = sel_rwy
                         st.rerun()
 
-        # SECTOR 3: 항로 / 하늘 관제
         else:
             st.subheader("☁️ 항로/하늘 관제 섹터")
 
@@ -906,35 +869,118 @@ else:
                     st.rerun()
 
     # ----------------------------------------------------
-    # [중앙 열] 📡 섹터 맞춤형 실시간 레이더 화면
+    # [중앙 열] 📡 섹터 맞춤형 레이더 스코프
     # ----------------------------------------------------
     with col_mid:
-        st.subheader("📡 섹터 맞춤형 실시간 레이더")
+        st.subheader("📡 섹터 전용 레이더 스코프")
         render_sector_specific_radar()
 
     # ----------------------------------------------------
-    # [우측 열] 🅿️ 게이트 현황 및 교신 로그
+    # [우측 열] 🔄 섹터 맞춤형 우측 현황판 (핵심 수정 구역)
     # ----------------------------------------------------
     with col_right:
-        st.subheader("🅿️ 게이트 주기 현황 (8개)")
-        g_cols = st.columns(2)
-        for idx, g_name in enumerate(GATES):
-            occ = st.session_state.gates_occupied[g_name]
-            with g_cols[idx % 2]:
-                if occ:
-                    st.markdown(
-                        f"""
-                        <div class="gate-box" style="border-color:#ef4444; background-color:#2a1215;">
-                            <b style="color:#f87171;">🔴 {g_name}</b><br><small>{occ}</small>
-                        </div>
-                        """,
-                        unsafe_allow_html=True,
+        # A. 접근 관제 전용 우측 현황판: 활주로 10개 및 비상 활주로
+        if "1. 접근" in st.session_state.active_sector:
+            st.subheader("🛣️ 활주로 실시간 상태 (10개)")
+
+            disp_rwys = RUNWAY_LIST.copy()
+            if st.session_state.emg_runway_open:
+                disp_rwys.append("EMG-01")
+
+            rwy_cols = st.columns(2)
+            for idx, r_name in enumerate(disp_rwys):
+                busy_until = st.session_state.runways_busy_until.get(
+                    r_name, 0.0
+                )
+                remaining_sec = max(0.0, busy_until - now)
+
+                with rwy_cols[idx % 2]:
+                    if remaining_sec > 0:
+                        st.markdown(
+                            f"""
+                            <div class="info-card" style="border-color:#ef4444; background-color:#2a1215;">
+                                <b style="color:#f87171;">🔴 {r_name}</b><br><small>{remaining_sec:.1f}초 점유</small>
+                            </div>
+                            """,
+                            unsafe_allow_html=True,
+                        )
+                        if st.button(
+                            f"🧹 비우기",
+                            key=f"clear_{r_name}",
+                            use_container_width=True,
+                        ):
+                            st.session_state.runways_busy_until[r_name] = 0.0
+                            st.rerun()
+                    else:
+                        st.markdown(
+                            f"""
+                            <div class="info-card" style="border-color:#10b981; background-color:#062319;">
+                                <b style="color:#34d399;">🟢 {r_name}</b><br><small>즉시 사용 가능</small>
+                            </div>
+                            """,
+                            unsafe_allow_html=True,
+                        )
+
+            st.write("")
+            if not st.session_state.emg_runway_open:
+                if st.button(
+                    "🚨 01E 비상 활주로 개설",
+                    type="primary",
+                    use_container_width=True,
+                ):
+                    st.session_state.emg_runway_open = True
+                    st.session_state.logs.append(
+                        "🚨 [비상 활주로] EMG-01 활주로가 개설되었습니다!"
                     )
-                else:
+                    st.rerun()
+
+        # B. 지상 관제 전용 우측 현황판: 게이트 8개 주기 현황
+        elif "2. 지상" in st.session_state.active_sector:
+            st.subheader("🅿️ 게이트 주기 현황 (8개)")
+            g_cols = st.columns(2)
+            for idx, g_name in enumerate(GATES):
+                occ = st.session_state.gates_occupied[g_name]
+                with g_cols[idx % 2]:
+                    if occ:
+                        st.markdown(
+                            f"""
+                            <div class="info-card" style="border-color:#ef4444; background-color:#2a1215;">
+                                <b style="color:#f87171;">🔴 {g_name}</b><br><small>{occ}</small>
+                            </div>
+                            """,
+                            unsafe_allow_html=True,
+                        )
+                    else:
+                        st.markdown(
+                            f"""
+                            <div class="info-card" style="border-color:#10b981; background-color:#062319;">
+                                <b style="color:#34d399;">🟢 {g_name}</b><br><small>빈 게이트</small>
+                            </div>
+                            """,
+                            unsafe_allow_html=True,
+                        )
+
+        # C. 항로 관제 전용 우측 현황판: ACC 관제센터 주파수 및 공역 웨이포인트
+        else:
+            st.subheader("📡 인근 ACC 관제센터 채널")
+            for center in CENTERS:
+                st.markdown(
+                    f"""
+                    <div class="info-card" style="border-color:#a855f7; background-color:#1a0f2e;">
+                        <b style="color:#c084fc;">📡 {center}</b><br><small>VHF 124.50 MHz [정상]</small>
+                    </div>
+                    """,
+                    unsafe_allow_html=True,
+                )
+
+            st.caption("◆ 공역 주요 웨이포인트(Fixes)")
+            wp_cols = st.columns(2)
+            for idx, (wp_name, wx, wy) in enumerate(WAYPOINTS):
+                with wp_cols[idx % 2]:
                     st.markdown(
                         f"""
-                        <div class="gate-box" style="border-color:#10b981; background-color:#062319;">
-                            <b style="color:#34d399;">🟢 {g_name}</b><br><small>빈 게이트</small>
+                        <div class="info-card">
+                            <b style="color:#38bdf8;">◆ {wp_name}</b>
                         </div>
                         """,
                         unsafe_allow_html=True,
@@ -942,7 +988,7 @@ else:
 
         st.divider()
         st.caption("📜 실시간 관제 교신 로그")
-        for log in reversed(st.session_state.logs[-6:]):
+        for log in reversed(st.session_state.logs[-5:]):
             st.caption(log)
 
     time.sleep(0.4)
