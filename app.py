@@ -1,5 +1,6 @@
 import random
 import time
+import matplotlib.pyplot as plt
 import pandas as pd
 import streamlit as st
 
@@ -145,8 +146,10 @@ def spawn_plane():
                         "callsign": cs,
                         "category": "ARR",
                         "type": ac_type,
-                        "fuel": float(random.randint(35, 80)),
-                        "distance": float(random.randint(15, 35)),
+                        "fuel": float(
+                            random.randint(50, 95)
+                        ),  # 여유 있는 시작 연료
+                        "distance": float(random.randint(20, 40)),
                         "delay": 0.0,
                         "status": "착륙 요청 중",
                         "assigned_runway": None,
@@ -186,15 +189,15 @@ def init_game():
     st.session_state.last_tick_time = now
     st.session_state.last_spawn_time = now
     st.session_state.logs = [
-        "🚨 [관제 업무 개시] 실시간 적정 속도(약 1.6초당 1% 소모)로 기름이 차감됩니다."
+        "🚨 [관제 업무 개시] 여유 있는 실시간 속도(약 5초당 1% 소모) 및 3D 관제 레이더가 적용되었습니다."
     ]
 
-    for _ in range(10):
+    for _ in range(8):
         spawn_plane()
 
 
 def update_realtime_engine():
-    """실시간 기름 차감 엔진 (속도 완화: 초당 0.6% 차감)"""
+    """실시간 기름 차감 엔진 (속도 완화: 초당 0.2% 차감 = 약 5초당 1%)"""
     if not st.session_state.game_started or st.session_state.game_over:
         return
 
@@ -209,7 +212,7 @@ def update_realtime_engine():
 
         # 1. 착륙 접근 중
         if status == "착륙 접근 중":
-            p["distance"] -= 5.0 * dt  # 초당 5 NM 이동
+            p["distance"] -= 4.0 * dt  # 초당 4 NM 이동
             if p["distance"] <= 0:
                 st.session_state.landed_count += 1
                 st.session_state.score += 20
@@ -229,9 +232,9 @@ def update_realtime_engine():
                 )
                 continue
 
-        # 3. 상공 착륙 대기 비행기 (초당 0.6% 감소 ➔ 약 1.6초에 1% 감소)
+        # 3. 상공 착륙 대기 비행기 (초당 0.2% 감소 ➔ 약 5초에 1% 감소)
         elif cat == "ARR":
-            p["fuel"] -= 0.6 * dt
+            p["fuel"] -= 0.2 * dt
 
             # 🔴 [임무 실패 조건] 단 1대라도 기름 0% 도달 시 게임 오버
             if p["fuel"] <= 0:
@@ -249,10 +252,10 @@ def update_realtime_engine():
 
     st.session_state.planes = remaining_planes
 
-    # 5초마다 신규 항공기 스폰 (최대 16대 유지)
+    # 6초마다 신규 항공기 스폰 (최대 14대 유지)
     if (
-        now - st.session_state.last_spawn_time > 5.0
-        and len(st.session_state.planes) < 16
+        now - st.session_state.last_spawn_time > 6.0
+        and len(st.session_state.planes) < 14
     ):
         spawn_plane()
         st.session_state.last_spawn_time = now
@@ -323,6 +326,70 @@ def force_clear_runway(runway_name):
     st.toast(log_msg, icon="🧹")
 
 
+def render_3d_radar():
+    """실시간 비행기 3D/2D 접근 관제 레이더 차트 시각화"""
+    fig = plt.figure(figsize=(10, 3.2))
+    ax = fig.add_subplot(111, projection="3d")
+    fig.patch.set_facecolor("#070a13")
+    ax.set_facecolor("#070a13")
+
+    # 활주로 10개 바닥 배치
+    runway_x = list(range(1, 11))
+    runway_y = [0] * 10
+    runway_z = [0] * 10
+    ax.scatter(
+        runway_x,
+        runway_y,
+        runway_z,
+        color="#10b981",
+        s=80,
+        marker="s",
+        label="Runways",
+    )
+
+    # 비행기 위치 플롯
+    for p in st.session_state.planes:
+        cat = p.get("category")
+        dist = p.get("distance", 0)
+        fuel = p.get("fuel", 50)
+        cs = p.get("callsign")
+        status = p.get("status", "")
+
+        # X축: 배정 활주로 번호 또는 임의의 위치
+        if p.get("assigned_runway") and "RWY" in p["assigned_runway"]:
+            try:
+                r_idx = int(p["assigned_runway"].replace("RWY ", ""))
+            except:
+                r_idx = 5
+        else:
+            r_idx = (abs(hash(cs)) % 10) + 1
+
+        if cat == "ARR":
+            color = "#38bdf8" if status != "착륙 접근 중" else "#10b981"
+            if fuel < 25:
+                color = "#ef4444"
+            ax.scatter(r_idx, dist, fuel, color=color, s=60, marker="^")
+            ax.text(r_idx, dist, fuel + 3, f"{cs}\n({fuel:.0f}%)", color=color, fontsize=7)
+        else:
+            color = "#f59e0b"
+            ax.scatter(r_idx, 0, 10, color=color, s=50, marker="v")
+            ax.text(r_idx, 0, 15, f"{cs}(DEP)", color=color, fontsize=7)
+
+    ax.set_xlim(0, 11)
+    ax.set_ylim(-2, 45)
+    ax.set_zlim(0, 110)
+
+    ax.set_xlabel("RWY No.", color="white", fontsize=8)
+    ax.set_ylabel("Dist(NM)", color="white", fontsize=8)
+    ax.set_zlabel("Fuel(%)", color="white", fontsize=8)
+    ax.tick_params(colors="white", labelsize=7)
+    ax.grid(True, color="#1e293b", alpha=0.3)
+    ax.view_init(elev=20, azim=-60)
+
+    st.pyplot(fig, use_container_width=True)
+    plt.close(fig)
+
+
 # ==========================================
 # 4. 실시간 엔진 업데이트 수행
 # ==========================================
@@ -355,7 +422,7 @@ if st.session_state.game_over:
 
 elif not st.session_state.game_started:
     st.warning(
-        "⚠️ 실시간으로 비행기의 기름이 감소합니다! 연료가 0%가 되면 즉시 임무 실패입니다."
+        "⚠️ 약 5초에 1%씩 여유 있게 기름이 감소합니다. 실시간 3D 접근 차트를 보면서 관제하세요!"
     )
     if st.button(
         "🚀 비상 관제 업무 개시", type="primary", use_container_width=True
@@ -370,6 +437,10 @@ else:
     m2.metric("🛬 착륙 성공", f"{st.session_state.landed_count}대")
     m3.metric("🛫 이륙 성공", f"{st.session_state.tookoff_count}대")
     m4.metric("✈️ 상공/지상 비행기", f"{len(st.session_state.planes)}대")
+
+    # ✈️ 실시간 3D 접근 레이더 시각화 뷰
+    with st.expander("📡 실시간 3D 비행기 고도·접근 레이더 시각화 뷰", expanded=True):
+        render_3d_radar()
 
     st.divider()
 
@@ -577,6 +648,6 @@ else:
         for log in reversed(st.session_state.logs[-8:]):
             st.caption(log)
 
-    # 0.3초마다 자동 재실행하여 실시간 연출
-    time.sleep(0.3)
+    # 0.4초 간격 자동 재실행
+    time.sleep(0.4)
     st.rerun()
