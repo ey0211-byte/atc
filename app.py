@@ -163,7 +163,6 @@ if "last_spawn_time" not in st.session_state:
 
 
 def add_log(sector_code, text):
-    """섹터별 독립 로깅 시스템 (APPROACH, GROUND, ENROUTE, ALL)"""
     st.session_state.logs.append({"sector": sector_code, "text": text})
 
 
@@ -187,7 +186,7 @@ def spawn_plane():
     ]
     existing_cs = [p["callsign"] for p in st.session_state.planes]
 
-    for _ in range(30):
+    for _ in range(50):
         cs = f"{random.choice(prefixes)}{random.randint(100, 999)}"
         if cs not in existing_cs:
             category = random.choice(["ARR", "DEP", "ENROUTE"])
@@ -210,8 +209,8 @@ def spawn_plane():
                         "type": ac_type,
                         "passengers": passengers,
                         "origin": random.choice(AIRPORTS),
-                        "fuel": float(random.randint(50, 90)),
-                        "distance": float(random.randint(18, 36)),
+                        "fuel": float(random.randint(55, 95)),
+                        "distance": float(random.randint(18, 40)),
                         "delay": 0.0,
                         "status": "접근 요청 중",
                         "assigned_runway": None,
@@ -278,10 +277,11 @@ def init_game():
     st.session_state.logs = []
     add_log(
         "ALL",
-        "🚨 [통합 관제 개시] 관제 섹터별 교신 로그가 완전히 분리되었습니다.",
+        "🚨 [통합 관제 개시] 관리 항공기 정원이 대폭 확장되어 밀집 관제가 가동됩니다.",
     )
 
-    for _ in range(8):
+    # 초기 생성 항공기 수: 16대
+    for _ in range(16):
         spawn_plane()
 
 
@@ -423,9 +423,10 @@ def update_realtime_engine():
     st.session_state.planes = remaining_planes
     run_ai_auto_controller(now)
 
+    # 최대 수용 항공기 수: 24대, 스폰 주기: 3초
     if (
-        now - st.session_state.last_spawn_time > 5.0
-        and len(st.session_state.planes) < 12
+        now - st.session_state.last_spawn_time > 3.0
+        and len(st.session_state.planes) < 24
     ):
         spawn_plane()
         st.session_state.last_spawn_time = now
@@ -576,7 +577,7 @@ def render_sector_specific_radar():
         ax.set_xlim(0, 11)
         ax.set_ylim(-13, 7)
 
-    # 3. 항로/하늘 ACC 레이더 (활주로/지상 요소 100% 없음)
+    # 3. 항로/하늘 ACC 레이더
     else:
         ax.set_title(
             "[En-Route Area Control Radar (RKRR Sector)]",
@@ -670,7 +671,7 @@ if st.session_state.game_over:
 
 elif not st.session_state.game_started:
     st.info(
-        "👋 상단 라디오 버튼으로 섹터를 선택하면 전체 화면과 교신 로그가 완전히 분리되어 전환됩니다."
+        "👋 대규모 고밀도 관제 모드가 활성화되었습니다. 상단 탭으로 3개 섹터를 전환하며 관리할 수 있습니다."
     )
     if st.button(
         "🚀 통합 관제 업무 개시", type="primary", use_container_width=True
@@ -685,7 +686,7 @@ else:
     m2.metric("🛬 착륙 성공", f"{st.session_state.landed_count}대")
     m3.metric("🛫 이륙 성공", f"{st.session_state.tookoff_count}대")
     m4.metric("☁️ 항로 이양 성공", f"{st.session_state.handoff_count}대")
-    m5.metric("✈️ 관리 항공기", f"{len(st.session_state.planes)}대")
+    m5.metric("✈️ 관리 항공기", f"{len(st.session_state.planes)}대 / 24대")
 
     bar_c1, bar_c2 = st.columns([3, 1])
     with bar_c1:
@@ -711,7 +712,7 @@ else:
     current_sector = st.session_state.active_sector
 
     # ----------------------------------------------------
-    # [좌측 열] 섹터별 완벽 차별화 조작 패널
+    # [좌측 열] 섹터별 조작 제어 패널
     # ----------------------------------------------------
     with col_left:
         # SECTOR 1: 접근 / 활주로 관제
@@ -900,7 +901,7 @@ else:
                         f"🟡 [{p['callsign']}] ➔ {p.get('assigned_runway')} 유도로 이동 중..."
                     )
 
-        # SECTOR 3: 항로 / 하늘 관제 (착륙/활주로 용어 100% 제거)
+        # SECTOR 3: 항로 / 하늘 관제
         else:
             st.subheader("☁️ 항로/하늘 관제 섹터")
 
@@ -1090,7 +1091,6 @@ else:
                         unsafe_allow_html=True,
                     )
 
-        # 섹터별 고유 로그만 필터링하여 출력
         st.divider()
         st.caption("📜 섹터 전용 교신 로그")
         sec_code = (
